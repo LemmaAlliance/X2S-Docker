@@ -1,0 +1,3 @@
+[submodule "X2S"]
+	path = X2S
+	url = https://github.com/LemmaAlliance/X2S.git

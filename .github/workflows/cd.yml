@@ -1,0 +1,63 @@
+name: CD
+
+on:
+  repository_dispatch:
+    types: [source-released]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Get latest X2S release tag
+        id: release
+        run: |
+          TAG=$(curl -s https://api.github.com/repos/LemmaAlliance/X2S/releases/latest | jq -r .tag_name)
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "Failed to fetch latest release tag"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Update submodule to release tag
+        run: |
+          cd X2S
+          git fetch --tags origin
+          git checkout tags/${{ steps.release.outputs.tag }}
+          cd ..
+
+      - name: Commit submodule bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add X2S
+          git diff --cached --quiet || git commit -m "chore: bump X2S to ${{ steps.release.outputs.tag }} [skip ci]"
+          git push
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: |
+            ghcr.io/lemmaalliance/x2s-docker:latest
+            ghcr.io/lemmaalliance/x2s-docker:${{ steps.release.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=X2S storage server
+            org.opencontainers.image.licenses=GPL-3.0-only

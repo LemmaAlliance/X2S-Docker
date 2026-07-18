@@ -1,0 +1,13 @@
+services:
+  x2s:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.json:/etc/x2s/config.json:ro
+      - x2s_data:/data
+    environment:
+      - X2S_DATA_DIR=/data
+
+volumes:
+  x2s_data:
